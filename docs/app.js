@@ -45,8 +45,9 @@
   var cfg = { pulsoidToken: '', age: 35, weightKg: 80, sex: 'male', restingHr: 60 };
   var videos = [];
   var vIndex = 0;
-  var stations = []; // música (SoundCloud)
-  var stationIndex = -1; // -1 = som ambiente do vídeo
+  // webOS toca uma mídia por vez por app: música de fora (SoundCloud etc.) pausaria o vídeo.
+  // Por isso a música fica no celular e aqui só se escolhe ligar ou não o som do vídeo.
+  var videoSound = true;
 
   var mode = 'idle'; // idle | running | paused | summary
   var elapsed = 0;   // segundos de pedal
@@ -91,12 +92,10 @@
     document.body.className = '';
     $('splash').className = 'overlay';
     playVideo();
-    music.resume();
   }
   function pause() {
     mode = 'paused';
     video().pause();
-    music.pause();
     document.body.className = 'paused';
     $('splash-title').textContent = 'Pausado';
     $('splash-sub').innerHTML = 'Aperte <b>OK</b> para continuar.';
@@ -133,7 +132,6 @@
       seconds: Math.round(elapsed), avgHr: avg, maxHr: hrMax || null,
       kcal: Math.round(kcal), kcalFromHr: kcalFromHr, zoneSeconds: zoneSecs,
       video: videos[vIndex] ? videos[vIndex].title : null,
-      music: stationIndex >= 0 ? stations[stationIndex].name : null,
     };
     if (HOSTED) {
       var all = [];
@@ -266,7 +264,7 @@
   }
   function playVideo() {
     var el = video();
-    el.muted = stationIndex >= 0 || mode !== 'running';
+    el.muted = !videoSound || mode !== 'running';
     var p = el.play();
     if (p && p.catch) p.catch(function () {});
   }
@@ -287,85 +285,13 @@
     setTimeout(function () { loadVideo(vIndex + 1); }, 1500);
   });
 
-  // ---------- música (SoundCloud, sem anúncio) ----------
-  // Cada estação é uma lista de sets oficiais; quando um termina, toca o próximo.
-  var music = (function () {
-    var widget = null, ready = false, setIndex = 0, wantPlay = false;
-
-    function url(u) {
-      return 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(u) +
-        '&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false';
-    }
-    function ensure() {
-      if (widget || !window.SC) return;
-      var f = $('sc');
-      f.src = url(stations[stationIndex].sets[setIndex]);
-      widget = SC.Widget(f);
-      widget.bind(SC.Widget.Events.READY, function () {
-        ready = true;
-        widget.setVolume(100);
-        if (wantPlay) widget.play();
-        showNowPlaying();
-      });
-      widget.bind(SC.Widget.Events.PLAY, showNowPlaying);
-      widget.bind(SC.Widget.Events.FINISH, function () { next(); });
-      widget.bind(SC.Widget.Events.ERROR, function () { toast('Set indisponível, pulando…'); next(); });
-    }
-    function loadSet() {
-      var u = stations[stationIndex].sets[setIndex];
-      if (!widget) { ensure(); return; }
-      ready = false;
-      widget.load(u, {
-        auto_play: wantPlay, hide_related: true, show_comments: false, visual: false,
-        callback: function () { ready = true; widget.setVolume(100); if (wantPlay) widget.play(); showNowPlaying(); },
-      });
-    }
-    function next() {
-      var st = stations[stationIndex];
-      if (!st) return;
-      setIndex = (setIndex + 1) % st.sets.length;
-      loadSet();
-    }
-    function showNowPlaying() {
-      var chip = $('music-now');
-      if (stationIndex < 0) { chip.className = 'pill off'; $('music-now-text').textContent = 'Som do vídeo'; return; }
-      chip.className = 'pill on';
-      $('music-now-text').textContent = stations[stationIndex].name;
-      if (widget && ready) {
-        widget.getCurrentSound(function (snd) {
-          if (snd && snd.title) $('music-now-text').textContent = stations[stationIndex].name + ' — ' + snd.title;
-        });
-      }
-    }
-    return {
-      choose: function (i) {
-        stationIndex = i;
-        store('bike.station', String(i));
-        if (i < 0) {
-          if (widget) widget.pause();
-          wantPlay = false;
-        } else {
-          setIndex = Math.floor(Math.random() * stations[i].sets.length);
-          wantPlay = mode === 'running';
-          loadSet();
-        }
-        playVideo();
-        showNowPlaying();
-      },
-      resume: function () {
-        if (stationIndex < 0) return;
-        wantPlay = true;
-        if (!widget) ensure();
-        else if (ready) widget.play();
-      },
-      pause: function () {
-        wantPlay = false;
-        if (widget && ready) widget.pause();
-      },
-      skip: function () { if (stationIndex >= 0) { toast('Próximo set'); next(); } },
-      refresh: showNowPlaying,
-    };
-  })();
+  function setSound(on) {
+    videoSound = on;
+    store('bike.sound', on ? '1' : '0');
+    video().muted = !on || mode !== 'running';
+    $('music-now').className = on ? 'pill off' : 'pill on';
+    $('music-now-text').textContent = on ? 'Som do vídeo' : 'Sem som · música no celular';
+  }
 
   // mantém o foco na página (não no iframe), senão o controle para de responder
   window.addEventListener('blur', function () { setTimeout(function () { window.focus(); }, 50); });
@@ -378,11 +304,8 @@
     else if (mode !== 'summary') menuItems.push({ label: mode === 'paused' ? '▶  Continuar treino' : '▶  Começar treino', act: start });
     if (mode === 'running' || mode === 'paused') menuItems.push({ label: '■  Finalizar treino', act: finish, cls: 'danger' });
     menuItems.push({ sep: true });
-    menuItems.push({ label: '🔊  Som do vídeo (natureza)', meta: 'Música', playing: stationIndex < 0, act: function () { music.choose(-1); } });
-    stations.forEach(function (st, i) {
-      menuItems.push({ label: '🎧  ' + st.name, meta: st.sets.length + ' sets', playing: i === stationIndex, act: function () { music.choose(i); } });
-    });
-    if (stationIndex >= 0) menuItems.push({ label: '⏭  Próximo set', act: music.skip });
+    menuItems.push({ label: '🔊  Som do vídeo (natureza)', meta: 'Som', playing: videoSound, act: function () { setSound(true); } });
+    menuItems.push({ label: '🎧  Sem som — música no celular', meta: 'Som', playing: !videoSound, act: function () { setSound(false); } });
     menuItems.push({ sep: true });
     videos.forEach(function (v, i) {
       menuItems.push({ label: v.title, meta: (v.place || '') + ' · ' + (v.length || ''), playing: i === vIndex, act: function () { loadVideo(i); } });
@@ -461,13 +384,7 @@
     var saved = parseInt(store('bike.vIndex'), 10);
     loadVideo(isNaN(saved) ? Math.floor(Math.random() * videos.length) : saved % videos.length);
   }
-  function applyStations(list) {
-    stations = list || [];
-    var saved = parseInt(store('bike.station'), 10);
-    stationIndex = !isNaN(saved) && saved < stations.length ? saved : -1;
-    if (stationIndex >= 0) music.choose(stationIndex);
-    music.refresh();
-  }
+
   function hashConfig() {
     var m = /[#&]cfg=([^&]*)/.exec(location.hash);
     var raw = m ? decodeURIComponent(m[1]) : store('bike.cfg');
@@ -481,12 +398,11 @@
   if (HOSTED) {
     applyConfig(hashConfig());
     getJson('videos.json').then(applyVideos);
-    getJson('music.json').then(applyStations);
   } else {
     getJson('/api/config').then(applyConfig).catch(function () { setHrStatus('err', 'Sem config'); });
     getJson('/api/videos').then(applyVideos);
-    getJson('music.json').then(applyStations);
   }
+  setSound(store('bike.sound') !== '0');
 
   // ?demo simula batimentos para testar o painel sem relógio
   if (/[?&]demo\b/.test(location.search)) {
