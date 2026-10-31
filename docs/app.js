@@ -45,9 +45,8 @@
   var cfg = { pulsoidToken: '', age: 35, weightKg: 80, sex: 'male', restingHr: 60 };
   var videos = [];
   var vIndex = 0;
-  var player = null;
-  var playerReady = false;
-  var unmuted = false;
+  var stations = []; // música (SoundCloud)
+  var stationIndex = -1; // -1 = som ambiente do vídeo
 
   var mode = 'idle'; // idle | running | paused | summary
   var elapsed = 0;   // segundos de pedal
@@ -91,13 +90,13 @@
     lastTick = Date.now();
     document.body.className = '';
     $('splash').className = 'overlay';
-    if (playerReady) {
-      if (!unmuted) { player.unMute(); player.setVolume(100); unmuted = true; }
-      player.playVideo();
-    }
+    playVideo();
+    music.resume();
   }
   function pause() {
     mode = 'paused';
+    video().pause();
+    music.pause();
     document.body.className = 'paused';
     $('splash-title').textContent = 'Pausado';
     $('splash-sub').innerHTML = 'Aperte <b>OK</b> para continuar.';
@@ -134,6 +133,7 @@
       seconds: Math.round(elapsed), avgHr: avg, maxHr: hrMax || null,
       kcal: Math.round(kcal), kcalFromHr: kcalFromHr, zoneSeconds: zoneSecs,
       video: videos[vIndex] ? videos[vIndex].title : null,
+      music: stationIndex >= 0 ? stations[stationIndex].name : null,
     };
     if (HOSTED) {
       var all = [];
@@ -255,54 +255,117 @@
     }
   }, 3000);
 
-  // ---------- YouTube ----------
+  // ---------- vídeo (MP4 nativo, sem anúncio) ----------
+  function video() { return $('vid'); }
   function showVideoInfo() {
     var v = videos[vIndex];
     if (!v) return;
     $('now-title').textContent = v.title;
     $('now-place').textContent = (v.place || '') + (v.length ? ' · ' + v.length : '');
+    $('now-credit').textContent = v.credit ? 'Vídeo: ' + v.credit : '';
+  }
+  function playVideo() {
+    var el = video();
+    el.muted = stationIndex >= 0 || mode !== 'running';
+    var p = el.play();
+    if (p && p.catch) p.catch(function () {});
   }
   function loadVideo(i) {
     if (!videos.length) return;
     vIndex = (i + videos.length) % videos.length;
     store('bike.vIndex', String(vIndex));
     showVideoInfo();
-    if (playerReady) player.loadVideoById(videos[vIndex].id);
+    var el = video();
+    el.src = videos[vIndex].url;
+    el.load();
+    playVideo();
   }
+  video().addEventListener('ended', function () { loadVideo(vIndex + 1); });
+  video().addEventListener('error', function () {
+    if (!videos.length) return;
+    toast('Vídeo indisponível, pulando…');
+    setTimeout(function () { loadVideo(vIndex + 1); }, 1500);
+  });
 
-  window.onYouTubeIframeAPIReady = function () {
-    var boot = function () {
-      if (!videos.length) { setTimeout(boot, 200); return; }
-      var playerVars = {
-        autoplay: 1, mute: 1, controls: 0, rel: 0, playsinline: 1, fs: 0,
-        iv_load_policy: 3, disablekb: 1, modestbranding: 1,
-      };
-      // instalado na TV a página é file:// e não tem origin válido
-      if (/^https?:/.test(location.origin)) playerVars.origin = location.origin;
-      player = new YT.Player('player', {
-        videoId: videos[vIndex].id,
-        host: 'https://www.youtube.com',
-        playerVars: playerVars,
-        events: {
-          onReady: function () {
-            playerReady = true;
-            var f = player.getIframe();
-            f.setAttribute('tabindex', '-1');
-            player.playVideo();
-            if (mode === 'running' && !unmuted) { player.unMute(); player.setVolume(100); unmuted = true; }
-          },
-          onStateChange: function (e) {
-            if (e.data === 0) loadVideo(vIndex + 1); // terminou
-          },
-          onError: function (e) {
-            toast('Vídeo indisponível (erro ' + e.data + '), pulando…');
-            setTimeout(function () { loadVideo(vIndex + 1); }, 1500);
-          },
-        },
+  // ---------- música (SoundCloud, sem anúncio) ----------
+  // Cada estação é uma lista de sets oficiais; quando um termina, toca o próximo.
+  var music = (function () {
+    var widget = null, ready = false, setIndex = 0, wantPlay = false;
+
+    function url(u) {
+      return 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(u) +
+        '&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false';
+    }
+    function ensure() {
+      if (widget || !window.SC) return;
+      var f = $('sc');
+      f.src = url(stations[stationIndex].sets[setIndex]);
+      widget = SC.Widget(f);
+      widget.bind(SC.Widget.Events.READY, function () {
+        ready = true;
+        widget.setVolume(100);
+        if (wantPlay) widget.play();
+        showNowPlaying();
       });
+      widget.bind(SC.Widget.Events.PLAY, showNowPlaying);
+      widget.bind(SC.Widget.Events.FINISH, function () { next(); });
+      widget.bind(SC.Widget.Events.ERROR, function () { toast('Set indisponível, pulando…'); next(); });
+    }
+    function loadSet() {
+      var u = stations[stationIndex].sets[setIndex];
+      if (!widget) { ensure(); return; }
+      ready = false;
+      widget.load(u, {
+        auto_play: wantPlay, hide_related: true, show_comments: false, visual: false,
+        callback: function () { ready = true; widget.setVolume(100); if (wantPlay) widget.play(); showNowPlaying(); },
+      });
+    }
+    function next() {
+      var st = stations[stationIndex];
+      if (!st) return;
+      setIndex = (setIndex + 1) % st.sets.length;
+      loadSet();
+    }
+    function showNowPlaying() {
+      var chip = $('music-now');
+      if (stationIndex < 0) { chip.className = 'pill off'; $('music-now-text').textContent = 'Som do vídeo'; return; }
+      chip.className = 'pill on';
+      $('music-now-text').textContent = stations[stationIndex].name;
+      if (widget && ready) {
+        widget.getCurrentSound(function (snd) {
+          if (snd && snd.title) $('music-now-text').textContent = stations[stationIndex].name + ' — ' + snd.title;
+        });
+      }
+    }
+    return {
+      choose: function (i) {
+        stationIndex = i;
+        store('bike.station', String(i));
+        if (i < 0) {
+          if (widget) widget.pause();
+          wantPlay = false;
+        } else {
+          setIndex = Math.floor(Math.random() * stations[i].sets.length);
+          wantPlay = mode === 'running';
+          loadSet();
+        }
+        playVideo();
+        showNowPlaying();
+      },
+      resume: function () {
+        if (stationIndex < 0) return;
+        wantPlay = true;
+        if (!widget) ensure();
+        else if (ready) widget.play();
+      },
+      pause: function () {
+        wantPlay = false;
+        if (widget && ready) widget.pause();
+      },
+      skip: function () { if (stationIndex >= 0) { toast('Próximo set'); next(); } },
+      refresh: showNowPlaying,
     };
-    boot();
-  };
+  })();
 
   // mantém o foco na página (não no iframe), senão o controle para de responder
   window.addEventListener('blur', function () { setTimeout(function () { window.focus(); }, 50); });
@@ -315,11 +378,16 @@
     else if (mode !== 'summary') menuItems.push({ label: mode === 'paused' ? '▶  Continuar treino' : '▶  Começar treino', act: start });
     if (mode === 'running' || mode === 'paused') menuItems.push({ label: '■  Finalizar treino', act: finish, cls: 'danger' });
     menuItems.push({ sep: true });
+    menuItems.push({ label: '🔊  Som do vídeo (natureza)', meta: 'Música', playing: stationIndex < 0, act: function () { music.choose(-1); } });
+    stations.forEach(function (st, i) {
+      menuItems.push({ label: '🎧  ' + st.name, meta: st.sets.length + ' sets', playing: i === stationIndex, act: function () { music.choose(i); } });
+    });
+    if (stationIndex >= 0) menuItems.push({ label: '⏭  Próximo set', act: music.skip });
+    menuItems.push({ sep: true });
     videos.forEach(function (v, i) {
       menuItems.push({ label: v.title, meta: (v.place || '') + ' · ' + (v.length || ''), playing: i === vIndex, act: function () { loadVideo(i); } });
     });
     menuSel = 0;
-    for (var i = 0; i < menuItems.length; i++) if (menuItems[i].playing) { menuSel = i; break; }
     renderMenu();
   }
   function renderMenu() {
@@ -333,7 +401,7 @@
       if (i === menuSel) cls.push('sel');
       if (it.playing) cls.push('playing');
       if (it.cls) cls.push(it.cls);
-      html += '<li class="' + cls.join(' ') + '"><span>' + (it.playing ? '♪  ' : '') + esc(it.label) + '</span>' +
+      html += '<li class="' + cls.join(' ') + '"><span>' + (it.playing ? '● ' : '') + esc(it.label) + '</span>' +
         (it.meta ? '<span class="meta">' + esc(it.meta) + '</span>' : '') + '</li>';
     }
     list.innerHTML = html;
@@ -391,8 +459,14 @@
   function applyVideos(list) {
     videos = list || [];
     var saved = parseInt(store('bike.vIndex'), 10);
-    vIndex = isNaN(saved) ? Math.floor(Math.random() * videos.length) : saved % videos.length;
-    showVideoInfo();
+    loadVideo(isNaN(saved) ? Math.floor(Math.random() * videos.length) : saved % videos.length);
+  }
+  function applyStations(list) {
+    stations = list || [];
+    var saved = parseInt(store('bike.station'), 10);
+    stationIndex = !isNaN(saved) && saved < stations.length ? saved : -1;
+    if (stationIndex >= 0) music.choose(stationIndex);
+    music.refresh();
   }
   function hashConfig() {
     var m = /[#&]cfg=([^&]*)/.exec(location.hash);
@@ -407,9 +481,11 @@
   if (HOSTED) {
     applyConfig(hashConfig());
     getJson('videos.json').then(applyVideos);
+    getJson('music.json').then(applyStations);
   } else {
     getJson('/api/config').then(applyConfig).catch(function () { setHrStatus('err', 'Sem config'); });
     getJson('/api/videos').then(applyVideos);
+    getJson('music.json').then(applyStations);
   }
 
   // ?demo simula batimentos para testar o painel sem relógio

@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="player-wrap"><div id="player"></div></div>
+  <div id="player-wrap"><video id="vid" muted playsinline preload="auto"></video></div>
+  <iframe id="sc" title="Música" allow="autoplay" tabindex="-1"></iframe>
   <div id="shield"></div>
   <div id="vignette"></div>
 
@@ -18,8 +19,10 @@
     <div id="now">
       <div class="eyebrow" id="now-place">—</div>
       <div id="now-title">Carregando vídeo…</div>
+      <div id="now-credit"></div>
     </div>
     <div id="top-right">
+      <div id="music-now" class="pill off"><span class="dot"></span><span id="music-now-text">Som do vídeo</span></div>
       <div id="hr-status" class="pill off"><span class="dot"></span><span id="hr-status-text">Sem Apple Watch</span></div>
       <div id="clock">--:--</div>
     </div>
@@ -63,7 +66,7 @@
       <ul class="keys">
         <li><kbd>OK</kbd> iniciar / pausar</li>
         <li><kbd>◀</kbd><kbd>▶</kbd> trocar vídeo</li>
-        <li><kbd>▼</kbd> lista de vídeos e opções</li>
+        <li><kbd>▼</kbd> vídeos, músicas e opções</li>
         <li><kbd>▲</kbd> esconder / mostrar painel</li>
       </ul>
     </div>
@@ -96,7 +99,7 @@
 
   <div id="toast"></div>
 
+<script src="https://w.soundcloud.com/player/api.js"></script>
 <script src="app.js"></script>
-<script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
