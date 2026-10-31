@@ -34,9 +34,17 @@ function readJson(file, fallback) {
 function writeJson(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
-function send(res, status, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+// Sem CORS liberado: outro site aberto no Mac não pode ler o token nem mudar os ajustes.
+// Só o /ping é aberto, para o app da TV (file://) achar o Mac.
+function send(res, status, body, type = 'application/json; charset=utf-8', cors = false) {
+  const headers = { 'Content-Type': type, 'Cache-Control': 'no-store' };
+  if (cors) headers['Access-Control-Allow-Origin'] = '*';
+  res.writeHead(status, headers);
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
+}
+// POST só com JSON: obriga o navegador a fazer preflight, que falha para outras origens.
+function isJson(req) {
+  return /^application\/json\b/.test(req.headers['content-type'] || '');
 }
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -51,7 +59,8 @@ const server = http.createServer(async (req, res) => {
   const p = url.pathname;
 
   if (req.method === 'OPTIONS') return send(res, 204, '');
-  if (p === '/ping') return send(res, 200, { ok: true });
+  if (p === '/ping') return send(res, 200, { ok: true }, undefined, true);
+  if (req.method === 'POST' && !isJson(req)) return send(res, 415, { error: 'use application/json' });
 
   if (p === '/api/config' && req.method === 'GET') {
     return send(res, 200, { ...DEFAULT_CONFIG, ...readJson(CONFIG, {}) });

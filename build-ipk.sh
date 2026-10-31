@@ -18,10 +18,11 @@ rm -rf build dist && mkdir -p build dist
 cp webos/appinfo.json build/
 APP_URL="$APP_URL" CFG="$CFG" node -e '
 const fs = require("fs");
-const esc = (s) => s.replace(/\\/g, "\\\\").replace(/'"'"'/g, "\\'"'"'");
+// string JS segura dentro de <script>: escapa \\, aspas e < (evita fechar a tag)
+const esc = (s) => s.replace(/\\/g, "\\\\").replace(/'"'"'/g, "\\x27").replace(/</g, "\\x3c");
 const html = fs.readFileSync("webos/index.html", "utf8")
-  .replace("__APP_URL__", esc(process.env.APP_URL))
-  .replace("__CFG__", esc(process.env.CFG));
+  .replace("__APP_URL__", () => esc(process.env.APP_URL))
+  .replace("__CFG__", () => esc(process.env.CFG));
 fs.writeFileSync("build/index.html", html);
 '
 python3 make-icons.py build
