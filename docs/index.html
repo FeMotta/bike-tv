@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bike TV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="player-wrap"><div id="player"></div></div>
+  <div id="shield"></div>
+  <div id="vignette"></div>
+
+  <!-- topo -->
+  <header id="top">
+    <div id="now">
+      <div class="eyebrow" id="now-place">—</div>
+      <div id="now-title">Carregando vídeo…</div>
+    </div>
+    <div id="top-right">
+      <div id="hr-status" class="pill off"><span class="dot"></span><span id="hr-status-text">Sem Apple Watch</span></div>
+      <div id="clock">--:--</div>
+    </div>
+  </header>
+
+  <!-- HUD -->
+  <section id="hud">
+    <div class="metric metric-time">
+      <div class="label">Tempo</div>
+      <div class="value" id="m-time">00:00</div>
+    </div>
+    <div class="metric metric-hr">
+      <div class="label"><span class="heart" id="heart">♥</span> BPM</div>
+      <div class="value" id="m-hr">--</div>
+      <div class="zone-bar" id="zone-bar">
+        <i data-z="1"></i><i data-z="2"></i><i data-z="3"></i><i data-z="4"></i><i data-z="5"></i>
+      </div>
+      <div class="sub" id="m-zone">Zona —</div>
+    </div>
+    <div class="metric">
+      <div class="label">Média / Máx</div>
+      <div class="value small" id="m-avgmax">-- / --</div>
+    </div>
+    <div class="metric">
+      <div class="label">Calorias</div>
+      <div class="value small" id="m-kcal">0</div>
+      <div class="sub" id="m-kcal-src">kcal estimadas</div>
+    </div>
+    <div class="metric metric-chart">
+      <div class="label">Últimos 10 min</div>
+      <canvas id="chart" width="520" height="150"></canvas>
+    </div>
+  </section>
+
+  <!-- tela inicial / pausa -->
+  <div id="splash" class="overlay show">
+    <div class="splash-card">
+      <div class="eyebrow">Bike TV</div>
+      <h1 id="splash-title">Bora pedalar?</h1>
+      <p id="splash-sub">Aperte <b>OK</b> para começar o treino.</p>
+      <ul class="keys">
+        <li><kbd>OK</kbd> iniciar / pausar</li>
+        <li><kbd>◀</kbd><kbd>▶</kbd> trocar vídeo</li>
+        <li><kbd>▼</kbd> lista de vídeos e opções</li>
+        <li><kbd>▲</kbd> esconder / mostrar painel</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- menu -->
+  <div id="menu" class="overlay">
+    <div class="menu-card">
+      <div class="eyebrow">Menu</div>
+      <ul id="menu-list"></ul>
+      <div class="hint"><kbd>▲</kbd><kbd>▼</kbd> navegar · <kbd>OK</kbd> escolher · <kbd>Voltar</kbd> fechar</div>
+    </div>
+  </div>
+
+  <!-- resumo -->
+  <div id="summary" class="overlay">
+    <div class="splash-card">
+      <div class="eyebrow">Treino concluído</div>
+      <h1>Mandou bem!</h1>
+      <div class="summary-grid">
+        <div><div class="label">Tempo</div><div class="value" id="s-time">--</div></div>
+        <div><div class="label">BPM médio</div><div class="value" id="s-avg">--</div></div>
+        <div><div class="label">BPM máx</div><div class="value" id="s-max">--</div></div>
+        <div><div class="label">Calorias</div><div class="value" id="s-kcal">--</div></div>
+      </div>
+      <div class="zones-summary" id="s-zones"></div>
+      <p class="hint">Aperte <b>OK</b> para um novo treino.</p>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+<script src="app.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

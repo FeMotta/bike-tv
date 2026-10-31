@@ -1,0 +1,7 @@
+# dados pessoais e gerados — nunca vão para o GitHub
+config.json
+sessions.json
+build/
+dist/
+node_modules/
+.DS_Store

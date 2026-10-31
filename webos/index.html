@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Bike TV</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #050807; color: #f4f7f2; font-family: Arial, sans-serif; cursor: none; }
+  .box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 70%; }
+  h1 { font-size: 64px; margin: 0 0 16px; }
+  p { font-size: 28px; color: rgba(244,247,242,0.65); margin: 8px 0; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1 id="t">Bike TV</h1>
+  <p id="m">Carregando…</p>
+  <p id="h"></p>
+</div>
+<script>
+  // O app de verdade é uma página publicada: o YouTube não toca em páginas file:// (erro 153).
+  var APP_URL = '__APP_URL__';
+  var CFG = '__CFG__'; // ajustes (token Pulsoid, idade, peso) — vão no #, nunca saem da TV
+  var tries = 0;
+
+  function open() {
+    var x = new XMLHttpRequest(), done = false;
+    function end(ok) {
+      if (done) return;
+      done = true;
+      if (ok) location.replace(APP_URL + '#cfg=' + encodeURIComponent(CFG));
+      else fail();
+    }
+    x.open('GET', APP_URL + 'videos.json?t=' + Date.now(), true);
+    x.timeout = 6000;
+    x.onload = function () { end(x.status === 200); };
+    x.onerror = x.ontimeout = function () { end(false); };
+    x.send();
+  }
+
+  function fail() {
+    tries++;
+    document.getElementById('t').textContent = 'Sem internet';
+    document.getElementById('m').textContent = 'Confira o Wi-Fi da TV.';
+    document.getElementById('h').textContent = 'Tentando de novo… (' + tries + ')  ·  OK para tentar agora';
+    setTimeout(open, 5000);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.keyCode === 13) open();
+    if (e.keyCode === 461) { if (window.webOS && webOS.platformBack) webOS.platformBack(); else window.close(); }
+  });
+
+  open();
+</script>
+</body>
+</html>
